@@ -125,7 +125,7 @@ type Page struct {
 	Items   int      `json:"items"`
 	Page    int      `json:"page"`
 	URLs    URLsList `json:"urls"`
-	Pages   int      `json:"pages"`
+	Pages   float32  `json:"pages"`
 }
 
 // URLsList ...
