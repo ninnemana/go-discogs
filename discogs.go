@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+
+	"github.com/gomodule/oauth1/oauth"
 )
 
 const (
@@ -28,11 +30,13 @@ type Options struct {
 type Discogs interface {
 	DatabaseService
 	SearchService
+	UserService
 }
 
 type discogs struct {
 	DatabaseService
 	SearchService
+	UserService
 }
 
 var header *http.Header
@@ -64,6 +68,7 @@ func New(o *Options) (Discogs, error) {
 	return discogs{
 		newDatabaseService(o.URL, cur),
 		newSearchService(o.URL + "/database/search"),
+		newCollectionService(o.URL),
 	}, nil
 }
 
@@ -87,6 +92,39 @@ func request(path string, params url.Values, resp interface{}) error {
 		return err
 	}
 	r.Header = *header
+
+	client := &http.Client{}
+	response, err := client.Do(r)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		switch response.StatusCode {
+		case http.StatusUnauthorized:
+			return ErrUnauthorized
+		default:
+			return fmt.Errorf("unknown error: %s", response.Status)
+		}
+	}
+
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(body, &resp)
+}
+
+func requestWithCreds(path string, creds oauth.Credentials, params url.Values, resp interface{}) error {
+	r, err := http.NewRequest("GET", path+"?"+params.Encode(), nil)
+	if err != nil {
+		return err
+	}
+	r.Header = *header
+
+	r.Header.Set("Authorization", fmt.Sprintf("Discogs key=%s, secret=%s", creds.Token, creds.Secret))
 
 	client := &http.Client{}
 	response, err := client.Do(r)
