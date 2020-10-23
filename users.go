@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gomodule/oauth1/oauth"
+	"go.opencensus.io/trace"
 )
 
 type UserService interface {
@@ -41,6 +42,15 @@ type Folder struct {
 }
 
 func (c *collectionService) GetFolders(ctx context.Context, creds oauth.Credentials, username string) (*CollectionResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "ninnemana.discogs.GetFolders")
+	defer span.End()
+
+	span.AddAttributes(
+		trace.StringAttribute("username", username),
+		trace.StringAttribute("token", creds.Token),
+		trace.StringAttribute("secret", creds.Secret),
+	)
+
 	var collection CollectionResponse
 
 	if err := requestWithCreds(
@@ -49,6 +59,11 @@ func (c *collectionService) GetFolders(ctx context.Context, creds oauth.Credenti
 		nil,
 		&collection,
 	); err != nil {
+		span.SetStatus(trace.Status{
+			Code: trace.StatusCodeInternal,
+		})
+		span.AddAttributes(trace.StringAttribute("err", err.Error()))
+
 		return nil, err
 	}
 
