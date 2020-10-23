@@ -69,8 +69,6 @@ func (c *collectionService) GetFolders(ctx context.Context, username string, opt
 
 	span.AddAttributes(
 		trace.StringAttribute("username", username),
-		trace.StringAttribute("token", c.creds.Token),
-		trace.StringAttribute("secret", c.creds.Secret),
 		trace.StringAttribute("route", route),
 	)
 
