@@ -45,17 +45,20 @@ func (c *collectionService) GetFolders(ctx context.Context, creds oauth.Credenti
 	ctx, span := trace.StartSpan(ctx, "ninnemana.discogs.GetFolders")
 	defer span.End()
 
+	route := c.url + strings.Replace(collectionsURI, "{username}", username, 1)
+
 	span.AddAttributes(
 		trace.StringAttribute("username", username),
 		trace.StringAttribute("token", creds.Token),
 		trace.StringAttribute("secret", creds.Secret),
+		trace.StringAttribute("route", route),
 	)
 
 	var collection CollectionResponse
 
 	if err := requestWithCreds(
 		ctx,
-		c.url+strings.Replace(collectionsURI, "{username}", username, 1),
+		route,
 		creds,
 		nil,
 		&collection,
