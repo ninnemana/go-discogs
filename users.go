@@ -54,6 +54,7 @@ func (c *collectionService) GetFolders(ctx context.Context, creds oauth.Credenti
 	var collection CollectionResponse
 
 	if err := requestWithCreds(
+		ctx,
 		c.url+strings.Replace(collectionsURI, "{username}", username, 1),
 		creds,
 		nil,
