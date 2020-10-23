@@ -1,11 +1,14 @@
 package discogs
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+
+	"github.com/gomodule/oauth1/oauth"
 )
 
 const (
@@ -28,11 +31,15 @@ type Options struct {
 type Discogs interface {
 	DatabaseService
 	SearchService
+	UserService
+	CollectionService
 }
 
 type discogs struct {
 	DatabaseService
 	SearchService
+	UserService
+	CollectionService
 }
 
 var header *http.Header
@@ -64,6 +71,8 @@ func New(o *Options) (Discogs, error) {
 	return discogs{
 		newDatabaseService(o.URL, cur),
 		newSearchService(o.URL + "/database/search"),
+		newUserService(o.URL),
+		newCollectionService(o.URL),
 	}, nil
 }
 
@@ -90,6 +99,30 @@ func request(path string, params url.Values, resp interface{}) error {
 
 	client := &http.Client{}
 	response, err := client.Do(r)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		switch response.StatusCode {
+		case http.StatusUnauthorized:
+			return ErrUnauthorized
+		default:
+			return fmt.Errorf("unknown error: %s", response.Status)
+		}
+	}
+
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(body, &resp)
+}
+
+func requestWithCreds(ctx context.Context, path string, client *oauth.Client, creds *oauth.Credentials, params url.Values, resp interface{}) error {
+	response, err := client.GetContext(ctx, creds, path, params)
 	if err != nil {
 		return err
 	}
