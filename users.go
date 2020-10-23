@@ -43,15 +43,15 @@ type Folder struct {
 	ResourceURL string `json:"resource_url"`
 }
 
-type Option func(v interface{}) func(*collectionService)
+type Option func(*collectionService)
 
-func WithCredentials(creds *oauth.Credentials) func(c *collectionService) {
+func WithCredentials(creds *oauth.Credentials) Option {
 	return func(c *collectionService) {
 		c.creds = creds
 	}
 }
 
-func WithClient(client *oauth.Client) func(c *collectionService) {
+func WithClient(client *oauth.Client) Option {
 	return func(c *collectionService) {
 		c.oauthClient = client
 	}
