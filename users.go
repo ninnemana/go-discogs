@@ -13,11 +13,13 @@ type UserService interface {
 }
 
 type CollectionService interface {
-	GetFolders(ctx context.Context, creds oauth.Credentials, username string) (*CollectionResponse, error)
+	GetFolders(ctx context.Context, username string, options ...Option) (*CollectionResponse, error)
 }
 
 type collectionService struct {
-	url string
+	url         string
+	oauthClient *oauth.Client
+	creds       *oauth.Credentials
 }
 
 const (
@@ -41,16 +43,34 @@ type Folder struct {
 	ResourceURL string `json:"resource_url"`
 }
 
-func (c *collectionService) GetFolders(ctx context.Context, creds oauth.Credentials, username string) (*CollectionResponse, error) {
+type Option func(v interface{}) func(*collectionService)
+
+func WithCredentials(creds *oauth.Credentials) func(c *collectionService) {
+	return func(c *collectionService) {
+		c.creds = creds
+	}
+}
+
+func WithClient(client *oauth.Client) func(c *collectionService) {
+	return func(c *collectionService) {
+		c.oauthClient = client
+	}
+}
+
+func (c *collectionService) GetFolders(ctx context.Context, username string, options ...Option) (*CollectionResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "ninnemana.discogs.GetFolders")
 	defer span.End()
+
+	for _, opts := range options {
+		opts(c)
+	}
 
 	route := c.url + strings.Replace(collectionsURI, "{username}", username, 1)
 
 	span.AddAttributes(
 		trace.StringAttribute("username", username),
-		trace.StringAttribute("token", creds.Token),
-		trace.StringAttribute("secret", creds.Secret),
+		trace.StringAttribute("token", c.creds.Token),
+		trace.StringAttribute("secret", c.creds.Secret),
 		trace.StringAttribute("route", route),
 	)
 
@@ -59,7 +79,8 @@ func (c *collectionService) GetFolders(ctx context.Context, creds oauth.Credenti
 	if err := requestWithCreds(
 		ctx,
 		route,
-		creds,
+		c.oauthClient,
+		c.creds,
 		nil,
 		&collection,
 	); err != nil {
