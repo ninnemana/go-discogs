@@ -8,7 +8,7 @@ import (
 )
 
 type UserService interface {
-	OAuthIdentity(ctx context.Context, options ...Option) (map[string]interface{}, error)
+	OAuthIdentity(ctx context.Context, options ...Option) (*Identity, error)
 }
 
 type userService struct {
@@ -27,7 +27,14 @@ func newUserService(url string) UserService {
 	}
 }
 
-func (u *userService) OAuthIdentity(ctx context.Context, options ...Option) (map[string]interface{}, error) {
+type Identity struct {
+	ConsumerName string `json:"consumer_name"`
+	ID           int64  `json:"id"`
+	ResourceURL  string `json:"resource_url"`
+	Username     string `json:"username"`
+}
+
+func (u *userService) OAuthIdentity(ctx context.Context, options ...Option) (*Identity, error) {
 	ctx, span := trace.StartSpan(ctx, "ninnemana.discog/Users.OAuthIdentity")
 	defer span.End()
 
@@ -41,7 +48,7 @@ func (u *userService) OAuthIdentity(ctx context.Context, options ...Option) (map
 		trace.StringAttribute("route", route),
 	)
 
-	var id map[string]interface{}
+	var id Identity
 
 	if err := requestWithCreds(
 		ctx,
@@ -59,5 +66,5 @@ func (u *userService) OAuthIdentity(ctx context.Context, options ...Option) (map
 		return nil, err
 	}
 
-	return id, nil
+	return &id, nil
 }
