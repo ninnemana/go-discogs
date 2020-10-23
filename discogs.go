@@ -118,19 +118,8 @@ func request(path string, params url.Values, resp interface{}) error {
 	return json.Unmarshal(body, &resp)
 }
 
-func requestWithCreds(ctx context.Context, path string, creds oauth.Credentials, params url.Values, resp interface{}) error {
-	r, err := http.NewRequest("GET", path+"?"+params.Encode(), nil)
-	if err != nil {
-		return err
-	}
-	r.Header = *header
-
-	authHeader := fmt.Sprintf("Discogs key=%s, secret=%s", creds.Token, creds.Secret)
-	r.Header.Set("Authorization", authHeader)
-	fmt.Println(r.Header)
-
-	client := &http.Client{}
-	response, err := client.Do(r.WithContext(ctx))
+func requestWithCreds(ctx context.Context, path string, client *oauth.Client, creds *oauth.Credentials, params url.Values, resp interface{}) error {
+	response, err := client.GetContext(ctx, creds, path, params)
 	if err != nil {
 		return err
 	}
