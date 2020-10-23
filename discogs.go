@@ -69,7 +69,7 @@ func New(o *Options) (Discogs, error) {
 	return discogs{
 		newDatabaseService(o.URL, cur),
 		newSearchService(o.URL + "/database/search"),
-		newCollectionService(o.URL),
+		newUserService(o.URL),
 	}, nil
 }
 

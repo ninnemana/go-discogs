@@ -2,85 +2,54 @@ package discogs
 
 import (
 	"context"
-	"strings"
 
 	"github.com/gomodule/oauth1/oauth"
 	"go.opencensus.io/trace"
 )
 
 type UserService interface {
-	CollectionService
+	OAuthIdentity(ctx context.Context, options ...Option) (map[string]interface{}, error)
 }
 
-type CollectionService interface {
-	GetFolders(ctx context.Context, username string, options ...Option) (*CollectionResponse, error)
-}
-
-type collectionService struct {
+type userService struct {
 	url         string
 	oauthClient *oauth.Client
 	creds       *oauth.Credentials
 }
 
 const (
-	collectionsURI = "/users/{username}/collection/folders"
+	oauthIdentityURI = "/oauth/identity"
 )
 
-func newCollectionService(url string) CollectionService {
-	return &collectionService{
+func newUserService(url string) UserService {
+	return &userService{
 		url: url,
 	}
 }
 
-type CollectionResponse struct {
-	Folders []Folder `json:"folders"`
-}
-
-type Folder struct {
-	ID          int    `json:"id"`
-	Count       int    `json:"count"`
-	Name        string `json:"name"`
-	ResourceURL string `json:"resource_url"`
-}
-
-type Option func(*collectionService)
-
-func WithCredentials(creds *oauth.Credentials) Option {
-	return func(c *collectionService) {
-		c.creds = creds
-	}
-}
-
-func WithClient(client *oauth.Client) Option {
-	return func(c *collectionService) {
-		c.oauthClient = client
-	}
-}
-
-func (c *collectionService) GetFolders(ctx context.Context, username string, options ...Option) (*CollectionResponse, error) {
-	ctx, span := trace.StartSpan(ctx, "ninnemana.discogs.GetFolders")
+func (u *userService) OAuthIdentity(ctx context.Context, options ...Option) (map[string]interface{}, error) {
+	ctx, span := trace.StartSpan(ctx, "ninnemana.discog/Users.OAuthIdentity")
 	defer span.End()
 
 	for _, opts := range options {
-		opts(c)
+		opts(u)
 	}
 
-	route := c.url + strings.Replace(collectionsURI, "{username}", username, 1)
+	route := u.url + oauthIdentityURI
 
 	span.AddAttributes(
-		trace.StringAttribute("username", username),
 		trace.StringAttribute("route", route),
 	)
 
-	var collection CollectionResponse
+	var id map[string]interface{}
 
 	if err := requestWithCreds(
 		ctx,
 		route,
-		c.oauthClient,
-		c.creds,
+		u.oauthClient,
+		u.creds,
 		nil,
-		&collection,
+		&id,
 	); err != nil {
 		span.SetStatus(trace.Status{
 			Code: trace.StatusCodeInternal,
@@ -90,5 +59,5 @@ func (c *collectionService) GetFolders(ctx context.Context, username string, opt
 		return nil, err
 	}
 
-	return &collection, nil
+	return id, nil
 }
