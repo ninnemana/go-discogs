@@ -45,7 +45,7 @@ func (u *userService) OAuthIdentity(ctx context.Context, options ...Option) (*Id
 	route := u.url + oauthIdentityURI
 
 	span.AddAttributes(
-		trace.StringAttribute("route", route),
+		trace.StringAttribute("path", route),
 	)
 
 	var id Identity

@@ -90,7 +90,7 @@ func currency(c string) (string, error) {
 	}
 }
 
-func request(path string, params url.Values, resp interface{}) error {
+func request(ctx context.Context, path string, params url.Values, resp interface{}) error {
 	r, err := http.NewRequest("GET", path+"?"+params.Encode(), nil)
 	if err != nil {
 		return err
@@ -98,7 +98,7 @@ func request(path string, params url.Values, resp interface{}) error {
 	r.Header = *header
 
 	client := &http.Client{}
-	response, err := client.Do(r)
+	response, err := client.Do(r.WithContext(ctx))
 	if err != nil {
 		return err
 	}

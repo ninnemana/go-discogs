@@ -1,8 +1,12 @@
 package discogs
 
 import (
+	"context"
+	"fmt"
 	"net/url"
 	"strconv"
+
+	"go.opencensus.io/trace"
 )
 
 const (
@@ -15,21 +19,21 @@ const (
 // DatabaseService is an interface to work with database.
 type DatabaseService interface {
 	// Artist represents a person in the discogs database.
-	Artist(artistID int) (*Artist, error)
+	Artist(ctx context.Context, artistID int) (*Artist, error)
 	// ArtistReleases returns a list of releases and masters associated with the artist.
-	ArtistReleases(artistID int, pagination *Pagination) (*ArtistReleases, error)
+	ArtistReleases(ctx context.Context, artistID int, pagination *Pagination) (*ArtistReleases, error)
 	// Label returns a label.
-	Label(labelID int) (*Label, error)
+	Label(ctx context.Context, labelID int) (*Label, error)
 	// LabelReleases returns a list of Releases associated with the label.
-	LabelReleases(labelID int, pagination *Pagination) (*LabelReleases, error)
+	LabelReleases(ctx context.Context, labelID int, pagination *Pagination) (*LabelReleases, error)
 	// Master returns a master release.
-	Master(masterID int) (*Master, error)
+	Master(ctx context.Context, masterID int) (*Master, error)
 	// MasterVersions retrieves a list of all Releases that are versions of this master.
-	MasterVersions(masterID int, pagination *Pagination) (*MasterVersions, error)
+	MasterVersions(ctx context.Context, masterID int, pagination *Pagination) (*MasterVersions, error)
 	// Release returns release by release's ID.
-	Release(releaseID int) (*Release, error)
+	Release(ctx context.Context, releaseID int) (*Release, error)
 	// ReleaseRating retruns community release rating.
-	ReleaseRating(releaseID int) (*ReleaseRating, error)
+	ReleaseRating(ctx context.Context, releaseID int) (*ReleaseRating, error)
 }
 
 type databaseService struct {
@@ -82,13 +86,34 @@ type Release struct {
 	Year              int            `json:"year"`
 }
 
-func (s *databaseService) Release(releaseID int) (*Release, error) {
+func (s *databaseService) Release(ctx context.Context, releaseID int) (*Release, error) {
+	ctx, span := trace.StartSpan(ctx, "ninnemana.discogs/DatabaseService.Release")
+	defer span.End()
+
 	params := url.Values{}
 	params.Set("curr_abbr", s.currency)
 
+	path := s.url + releasesURI + strconv.Itoa(releaseID)
+	span.AddAttributes(
+		trace.StringAttribute("currency", s.currency),
+		trace.StringAttribute("path", path),
+	)
+
 	var release *Release
-	err := request(s.url+releasesURI+strconv.Itoa(releaseID), params, &release)
-	return release, err
+	err := request(ctx, path, params, &release)
+	if err != nil {
+		RecordError(ctx, ErrorConfig{
+			Error:   err,
+			Code:    trace.StatusCodeInternal,
+			Message: "failed to fetch release",
+			Attributes: []trace.Attribute{
+				trace.Int64Attribute("id", int64(releaseID)),
+			},
+		})
+		return nil, fmt.Errorf("failed to fetch release: %w", err)
+	}
+
+	return release, nil
 }
 
 // ReleaseRating serves response for community release rating request.
@@ -97,10 +122,28 @@ type ReleaseRating struct {
 	Rating Rating `json:"rating"`
 }
 
-func (s *databaseService) ReleaseRating(releaseID int) (*ReleaseRating, error) {
+func (s *databaseService) ReleaseRating(ctx context.Context, releaseID int) (*ReleaseRating, error) {
+	ctx, span := trace.StartSpan(ctx, "ninnemana.discogs/DatabaseService.ReleaseRating")
+	defer span.End()
+
+	path := s.url + releasesURI + strconv.Itoa(releaseID) + "/rating"
+	span.AddAttributes(trace.StringAttribute("path", path))
+
 	var rating *ReleaseRating
-	err := request(s.url+releasesURI+strconv.Itoa(releaseID)+"/rating", nil, &rating)
-	return rating, err
+	err := request(ctx, path, nil, &rating)
+	if err != nil {
+		RecordError(ctx, ErrorConfig{
+			Error:   err,
+			Code:    trace.StatusCodeInternal,
+			Message: "failed to fetch release rating",
+			Attributes: []trace.Attribute{
+				trace.Int64Attribute("id", int64(releaseID)),
+			},
+		})
+		return nil, fmt.Errorf("failed to fetch release rating: %w", err)
+	}
+
+	return rating, nil
 }
 
 // Artist resource represents a person in the Discogs database
@@ -122,10 +165,28 @@ type Artist struct {
 	DataQuality    string   `json:"data_quality"`
 }
 
-func (s *databaseService) Artist(artistID int) (*Artist, error) {
+func (s *databaseService) Artist(ctx context.Context, artistID int) (*Artist, error) {
+	ctx, span := trace.StartSpan(ctx, "ninnemana.discogs/DatabaseService.Artist")
+	defer span.End()
+
+	path := s.url + artistsURI + strconv.Itoa(artistID)
+	span.AddAttributes(trace.StringAttribute("path", path))
+
 	var artist *Artist
-	err := request(s.url+artistsURI+strconv.Itoa(artistID), nil, &artist)
-	return artist, err
+	err := request(ctx, path, nil, &artist)
+	if err != nil {
+		RecordError(ctx, ErrorConfig{
+			Error:   err,
+			Code:    trace.StatusCodeInternal,
+			Message: "failed to fetch artist",
+			Attributes: []trace.Attribute{
+				trace.Int64Attribute("id", int64(artistID)),
+			},
+		})
+		return nil, fmt.Errorf("failed to fetch artist: %w", err)
+	}
+
+	return artist, nil
 }
 
 // ArtistReleases ...
@@ -134,10 +195,28 @@ type ArtistReleases struct {
 	Releases   []ReleaseSource `json:"releases"`
 }
 
-func (s *databaseService) ArtistReleases(artistID int, pagination *Pagination) (*ArtistReleases, error) {
+func (s *databaseService) ArtistReleases(ctx context.Context, artistID int, pagination *Pagination) (*ArtistReleases, error) {
+	ctx, span := trace.StartSpan(ctx, "ninnemana.discogs/DatabaseService.ArtistReleases")
+	defer span.End()
+
+	path := s.url + artistsURI + strconv.Itoa(artistID) + "/releases"
+	span.AddAttributes(trace.StringAttribute("path", path))
+
 	var releases *ArtistReleases
-	err := request(s.url+artistsURI+strconv.Itoa(artistID)+"/releases", pagination.params(), &releases)
-	return releases, err
+	err := request(ctx, path, pagination.params(), &releases)
+	if err != nil {
+		RecordError(ctx, ErrorConfig{
+			Error:   err,
+			Code:    trace.StatusCodeInternal,
+			Message: "failed to fetch artist releases",
+			Attributes: []trace.Attribute{
+				trace.Int64Attribute("id", int64(artistID)),
+			},
+		})
+		return nil, fmt.Errorf("failed to fetch artist releases: %w", err)
+	}
+
+	return releases, nil
 }
 
 // Label resource represents a label, company, recording studio, location,
@@ -156,10 +235,28 @@ type Label struct {
 	DataQuality string     `json:"data_quality"`
 }
 
-func (s *databaseService) Label(labelID int) (*Label, error) {
+func (s *databaseService) Label(ctx context.Context, labelID int) (*Label, error) {
+	ctx, span := trace.StartSpan(ctx, "ninnemana.discogs/DatabaseService.Label")
+	defer span.End()
+
+	path := s.url + labelsURI + strconv.Itoa(labelID)
+	span.AddAttributes(trace.StringAttribute("path", path))
+
 	var label *Label
-	err := request(s.url+labelsURI+strconv.Itoa(labelID), nil, &label)
-	return label, err
+	err := request(ctx, path, nil, &label)
+	if err != nil {
+		RecordError(ctx, ErrorConfig{
+			Error:   err,
+			Code:    trace.StatusCodeInternal,
+			Message: "failed to fetch artist releases",
+			Attributes: []trace.Attribute{
+				trace.Int64Attribute("id", int64(labelID)),
+			},
+		})
+		return nil, fmt.Errorf("failed to fetch artist releases: %w", err)
+	}
+
+	return label, nil
 }
 
 // LabelReleases is a list of Releases associated with the label.
@@ -168,10 +265,28 @@ type LabelReleases struct {
 	Releases   []ReleaseSource `json:"releases"`
 }
 
-func (s *databaseService) LabelReleases(labelID int, pagination *Pagination) (*LabelReleases, error) {
+func (s *databaseService) LabelReleases(ctx context.Context, labelID int, pagination *Pagination) (*LabelReleases, error) {
+	ctx, span := trace.StartSpan(ctx, "ninnemana.discogs/DatabaseService.LabelReleases")
+	defer span.End()
+
+	path := s.url + labelsURI + strconv.Itoa(labelID) + "/releases"
+	span.AddAttributes(trace.StringAttribute("path", path))
+
 	var releases *LabelReleases
-	err := request(s.url+labelsURI+strconv.Itoa(labelID)+"/releases", pagination.params(), &releases)
-	return releases, err
+	err := request(ctx, path, pagination.params(), &releases)
+	if err != nil {
+		RecordError(ctx, ErrorConfig{
+			Error:   err,
+			Code:    trace.StatusCodeInternal,
+			Message: "failed to fetch artist releases",
+			Attributes: []trace.Attribute{
+				trace.Int64Attribute("id", int64(labelID)),
+			},
+		})
+		return nil, fmt.Errorf("failed to fetch artist releases: %w", err)
+	}
+
+	return releases, nil
 }
 
 // Master resource represents a set of similar releases.
@@ -200,10 +315,28 @@ type Master struct {
 	DataQuality          string         `json:"data_quality"`
 }
 
-func (s *databaseService) Master(masterID int) (*Master, error) {
+func (s *databaseService) Master(ctx context.Context, masterID int) (*Master, error) {
+	ctx, span := trace.StartSpan(ctx, "ninnemana.discogs/DatabaseService.Master")
+	defer span.End()
+
+	path := s.url + mastersURI + strconv.Itoa(masterID)
+	span.AddAttributes(trace.StringAttribute("path", path))
+
 	var master *Master
-	err := request(s.url+mastersURI+strconv.Itoa(masterID), nil, &master)
-	return master, err
+	err := request(ctx, path, nil, &master)
+	if err != nil {
+		RecordError(ctx, ErrorConfig{
+			Error:   err,
+			Code:    trace.StatusCodeInternal,
+			Message: "failed to fetch artist releases",
+			Attributes: []trace.Attribute{
+				trace.Int64Attribute("id", int64(masterID)),
+			},
+		})
+		return nil, fmt.Errorf("failed to fetch artist releases: %w", err)
+	}
+
+	return master, nil
 }
 
 // MasterVersions retrieves a list of all releases that are versions of this master.
@@ -212,8 +345,26 @@ type MasterVersions struct {
 	Versions   []Version `json:"versions"`
 }
 
-func (s *databaseService) MasterVersions(masterID int, pagination *Pagination) (*MasterVersions, error) {
+func (s *databaseService) MasterVersions(ctx context.Context, masterID int, pagination *Pagination) (*MasterVersions, error) {
+	ctx, span := trace.StartSpan(ctx, "ninnemana.discogs/DatabaseService.MasterVersions")
+	defer span.End()
+
+	path := s.url + mastersURI + strconv.Itoa(masterID) + "/versions"
+	span.AddAttributes(trace.StringAttribute("path", path))
+
 	var versions *MasterVersions
-	err := request(s.url+mastersURI+strconv.Itoa(masterID)+"/versions", pagination.params(), &versions)
-	return versions, err
+	err := request(ctx, path, pagination.params(), &versions)
+	if err != nil {
+		RecordError(ctx, ErrorConfig{
+			Error:   err,
+			Code:    trace.StatusCodeInternal,
+			Message: "failed to fetch artist releases",
+			Attributes: []trace.Attribute{
+				trace.Int64Attribute("id", int64(masterID)),
+			},
+		})
+		return nil, fmt.Errorf("failed to fetch artist releases: %w", err)
+	}
+
+	return versions, nil
 }

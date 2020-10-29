@@ -1,8 +1,12 @@
 package discogs
 
 import (
+	"context"
+	"fmt"
 	"net/url"
 	"strconv"
+
+	"go.opencensus.io/trace"
 )
 
 // SearchService is an interface to work with search.
@@ -11,7 +15,7 @@ type SearchService interface {
 	// Issue a search query to database. This endpoint accepts pagination parameters.
 	// Authentication (as any user) is required.
 	// https://www.discogs.com/developers/#page:database,header:database-search
-	Search(req SearchRequest) (*Search, error)
+	Search(ctx context.Context, req SearchRequest) (*Search, error)
 }
 
 // searchService ...
@@ -145,8 +149,24 @@ type Result struct {
 	MasterID    int       `json:"master_id,omitempty"`
 }
 
-func (s *searchService) Search(req SearchRequest) (*Search, error) {
+func (s *searchService) Search(ctx context.Context, req SearchRequest) (*Search, error) {
+	ctx, span := trace.StartSpan(ctx, "ninnemana.discogs/SearchService.Search")
+	defer span.End()
+
 	var search *Search
-	err := request(s.url, req.params(), &search)
-	return search, err
+	err := request(ctx, s.url, req.params(), &search)
+	if err != nil {
+		RecordError(ctx, ErrorConfig{
+			Error:   err,
+			Code:    trace.StatusCodeInternal,
+			Message: "failed to execute search request",
+			Attributes: []trace.Attribute{
+				trace.StringAttribute("params", req.params().Encode()),
+			},
+		})
+
+		return nil, fmt.Errorf("failed to execute search: %w", err)
+	}
+
+	return search, nil
 }
